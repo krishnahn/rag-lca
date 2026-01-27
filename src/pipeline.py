@@ -375,6 +375,16 @@ class LCARagPipeline:
         """
         Run interactive query session.
         """
+        # Suppress verbose logging for clean interactive output
+        logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+        logging.getLogger("src.indexing").setLevel(logging.WARNING)
+        logging.getLogger("src.retrieval").setLevel(logging.WARNING)
+        logging.getLogger("src.generation").setLevel(logging.WARNING)
+        logging.getLogger("src.evaluation").setLevel(logging.WARNING)
+        logging.getLogger("llama_index").setLevel(logging.WARNING)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("__main__").setLevel(logging.WARNING)
+        
         print("\n" + "="*60)
         print("LCA RAG Interactive Mode")
         print("="*60)
@@ -417,13 +427,11 @@ class LCARagPipeline:
                         print(f"Unknown command: {question}")
                         continue
                 
-                # Process query
-                print("\n🔍 Searching...")
+                # Process query (silently)
                 result = self.query(question, evaluate=show_eval)
                 
                 # Display answer
-                print("\n" + "-"*40)
-                print("📖 Answer:")
+                print("\n📖 Answer:")
                 print("-"*40)
                 print(result["answer"])
                 
