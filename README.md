@@ -115,7 +115,7 @@ python -m src.pipeline test
   - Table boundaries
   - Mind map hierarchies
   - Calculation contexts
-- Configurable chunk size (default: 512 tokens, 128 overlap)
+- Configurable chunk size (default: 256 tokens, 64 overlap)
 
 ### Phase 3: Embedding
 - Uses Sentence Transformers (all-MiniLM-L6-v2)
