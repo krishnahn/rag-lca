@@ -3,6 +3,7 @@ Chunking and Embedding Module for LCA RAG Application.
 
 This module handles:
 - Smart chunking of documents while preserving structure
+- Semantic chunking using embeddings for better coherence
 - Text embeddings using Sentence Transformers
 - Handling different content types appropriately
 """
@@ -11,6 +12,7 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
+import numpy as np
 
 # LlamaIndex imports
 from llama_index.core.schema import Document, TextNode, NodeRelationship, RelatedNodeInfo
@@ -31,6 +33,168 @@ class ChunkingConfig:
     chunk_overlap: int = 128
     separator: str = "\n\n"
     preserve_structure: bool = True
+    use_semantic_chunking: bool = True  # Enable semantic chunking
+    semantic_threshold: float = 0.5  # Similarity threshold for semantic splits
+    min_chunk_size: int = 50  # Minimum chunk size for semantic chunking
+
+
+class SemanticChunker:
+    """
+    Semantic chunker that splits documents based on meaning similarity.
+    
+    Uses embeddings to detect semantic boundaries and creates
+    more coherent chunks compared to simple sentence splitting.
+    """
+    
+    def __init__(
+        self,
+        embed_model: HuggingFaceEmbedding,
+        config: Optional[ChunkingConfig] = None
+    ):
+        """
+        Initialize the semantic chunker.
+        
+        Args:
+            embed_model: HuggingFace embedding model
+            config: Chunking configuration
+        """
+        self.embed_model = embed_model
+        self.config = config or ChunkingConfig()
+        
+    def chunk_document(self, document: Document) -> List[TextNode]:
+        """
+        Chunk a document using semantic similarity.
+        
+        Args:
+            document: LlamaIndex Document
+            
+        Returns:
+            List of TextNode objects
+        """
+        text = document.text
+        
+        # Skip semantic chunking for short documents
+        if len(text) < self.config.min_chunk_size * 3:
+            return [TextNode(
+                text=text,
+                metadata={**document.metadata, "chunk_index": 0, "total_chunks": 1}
+            )]
+        
+        # Split into sentences first
+        sentences = self._split_into_sentences(text)
+        
+        if len(sentences) < 3:
+            return [TextNode(
+                text=text,
+                metadata={**document.metadata, "chunk_index": 0, "total_chunks": 1}
+            )]
+        
+        # Get embeddings for all sentences
+        embeddings = self._get_sentence_embeddings(sentences)
+        
+        # Find semantic breakpoints
+        breakpoints = self._find_breakpoints(embeddings)
+        
+        # Create chunks based on breakpoints
+        chunks = self._create_chunks(sentences, breakpoints)
+        
+        # Convert to TextNodes
+        nodes = []
+        for i, chunk_text in enumerate(chunks):
+            if len(chunk_text.strip()) < self.config.min_chunk_size:
+                continue
+            node = TextNode(
+                text=chunk_text,
+                metadata={
+                    **document.metadata,
+                    "chunk_index": i,
+                    "total_chunks": len(chunks),
+                    "chunking_strategy": "semantic"
+                }
+            )
+            nodes.append(node)
+        
+        # Update total_chunks
+        for node in nodes:
+            node.metadata["total_chunks"] = len(nodes)
+        
+        return nodes if nodes else [TextNode(
+            text=text,
+            metadata={**document.metadata, "chunk_index": 0, "total_chunks": 1}
+        )]
+    
+    def _split_into_sentences(self, text: str) -> List[str]:
+        """Split text into sentences."""
+        import re
+        # Simple sentence splitting
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        return [s.strip() for s in sentences if s.strip()]
+    
+    def _get_sentence_embeddings(self, sentences: List[str]) -> np.ndarray:
+        """Get embeddings for sentences."""
+        embeddings = []
+        for sentence in sentences:
+            emb = self.embed_model.get_text_embedding(sentence)
+            embeddings.append(emb)
+        return np.array(embeddings)
+    
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity between two vectors."""
+        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-8)
+    
+    def _find_breakpoints(self, embeddings: np.ndarray) -> List[int]:
+        """
+        Find semantic breakpoints based on embedding similarity.
+        
+        Returns indices where semantic similarity drops below threshold.
+        """
+        breakpoints = []
+        
+        for i in range(1, len(embeddings)):
+            similarity = self._cosine_similarity(embeddings[i-1], embeddings[i])
+            if similarity < self.config.semantic_threshold:
+                breakpoints.append(i)
+        
+        return breakpoints
+    
+    def _create_chunks(
+        self,
+        sentences: List[str],
+        breakpoints: List[int]
+    ) -> List[str]:
+        """Create chunks based on breakpoints while respecting size limits."""
+        chunks = []
+        current_chunk = []
+        current_length = 0
+        breakpoint_idx = 0
+        
+        for i, sentence in enumerate(sentences):
+            # Check if we hit a semantic breakpoint
+            at_breakpoint = (
+                breakpoint_idx < len(breakpoints) and 
+                i == breakpoints[breakpoint_idx]
+            )
+            
+            # Check if chunk is too large
+            would_exceed = current_length + len(sentence) > self.config.chunk_size
+            
+            if (at_breakpoint or would_exceed) and current_chunk:
+                # Save current chunk
+                chunks.append(" ".join(current_chunk))
+                current_chunk = []
+                current_length = 0
+                
+                if at_breakpoint:
+                    breakpoint_idx += 1
+            
+            current_chunk.append(sentence)
+            current_length += len(sentence) + 1  # +1 for space
+        
+        # Add remaining sentences
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+        
+        return chunks
 
 
 class StructureAwareChunker:

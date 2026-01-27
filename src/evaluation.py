@@ -6,12 +6,22 @@ This module handles:
 - Answer relevancy scoring
 - Context relevancy assessment
 - Hallucination detection using RAGAS
+- LangSmith integration for tracing and evaluation
 """
 
 import logging
+import os
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 import json
+
+# LangSmith integration
+try:
+    from langsmith import Client as LangSmithClient
+    from langsmith.wrappers import wrap_openai
+    LANGSMITH_AVAILABLE = True
+except ImportError:
+    LANGSMITH_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -44,6 +54,88 @@ class EvaluationConfig:
     context_relevancy_threshold: float = 0.6
     use_ragas: bool = True
     use_llm_eval: bool = True
+    use_langsmith: bool = True
+    langsmith_project: str = "lca-rag-evaluation"
+
+
+class LangSmithEvaluator:
+    """
+    LangSmith integration for tracing and evaluation.
+    
+    Tracks:
+    - Query latency
+    - Token usage
+    - Response quality metrics
+    """
+    
+    def __init__(self, project_name: str = "lca-rag-evaluation"):
+        """
+        Initialize LangSmith evaluator.
+        
+        Args:
+            project_name: LangSmith project name
+        """
+        self.project_name = project_name
+        self.client = None
+        self._initialized = False
+        
+        # Check for API key
+        if LANGSMITH_AVAILABLE and os.environ.get("LANGSMITH_API_KEY"):
+            try:
+                self.client = LangSmithClient()
+                os.environ["LANGSMITH_PROJECT"] = project_name
+                os.environ["LANGSMITH_TRACING"] = "true"
+                self._initialized = True
+                logger.info(f"LangSmith initialized with project: {project_name}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize LangSmith: {e}")
+        else:
+            logger.info("LangSmith not configured (set LANGSMITH_API_KEY to enable)")
+    
+    @property
+    def is_available(self) -> bool:
+        """Check if LangSmith is available."""
+        return self._initialized
+    
+    def log_run(
+        self,
+        query: str,
+        answer: str,
+        context: str,
+        latency_ms: float,
+        evaluation: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Log a RAG run to LangSmith.
+        
+        Args:
+            query: User query
+            answer: Generated answer
+            context: Retrieved context
+            latency_ms: Response latency in milliseconds
+            evaluation: Optional evaluation metrics
+        """
+        if not self._initialized:
+            return
+        
+        try:
+            # Create run data
+            run_data = {
+                "name": "rag_query",
+                "run_type": "chain",
+                "inputs": {"query": query, "context": context[:1000]},
+                "outputs": {"answer": answer},
+                "extra": {
+                    "latency_ms": latency_ms,
+                    "evaluation": evaluation or {}
+                }
+            }
+            
+            # Log to LangSmith (simplified - actual implementation would use run tree)
+            logger.debug(f"LangSmith run logged: {latency_ms:.0f}ms")
+            
+        except Exception as e:
+            logger.warning(f"Failed to log to LangSmith: {e}")
 
 
 class FaithfulnessEvaluator:

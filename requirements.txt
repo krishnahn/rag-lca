@@ -31,6 +31,10 @@ ollama>=0.3.0
 # Evaluation
 ragas>=0.1.10
 datasets>=2.18.0
+langsmith>=0.1.0
+
+# Reranking
+flashrank>=0.2.0
 
 # API (optional for later)
 fastapi>=0.110.0

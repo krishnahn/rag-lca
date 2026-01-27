@@ -3,7 +3,7 @@ Retrieval and Query Processing Module for LCA RAG Application.
 
 This module handles:
 - Query embedding and processing
-- Top-k retrieval with reranking
+- Top-k retrieval with FlashRank reranking
 - Metadata-based filtering
 - Multi-source context aggregation
 """
@@ -19,6 +19,13 @@ from llama_index.core.schema import NodeWithScore, TextNode
 from llama_index.core.postprocessor import SimilarityPostprocessor
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
+# FlashRank for fast reranking
+try:
+    from flashrank import Ranker, RerankRequest
+    FLASHRANK_AVAILABLE = True
+except ImportError:
+    FLASHRANK_AVAILABLE = False
+
 from tqdm import tqdm
 
 # Configure logging
@@ -33,8 +40,96 @@ class RetrievalConfig:
     similarity_threshold: float = 0.5
     rerank: bool = True
     rerank_top_n: int = 5
+    use_flashrank: bool = True  # Use FlashRank for fast reranking
+    flashrank_model: str = "ms-marco-MiniLM-L-12-v2"  # Fast and accurate
     include_metadata: bool = True
     aggregate_by_source: bool = True
+
+
+class FlashRankReranker:
+    """
+    Fast reranker using FlashRank library.
+    
+    FlashRank provides ultra-fast (<50ms) reranking using
+    lightweight cross-encoder models.
+    """
+    
+    def __init__(self, model_name: str = "ms-marco-MiniLM-L-12-v2"):
+        """
+        Initialize FlashRank reranker.
+        
+        Args:
+            model_name: Model to use for reranking
+        """
+        self.model_name = model_name
+        self._ranker = None
+        
+        if not FLASHRANK_AVAILABLE:
+            logger.warning("FlashRank not available. Install with: pip install flashrank")
+    
+    def _get_ranker(self) -> Optional["Ranker"]:
+        """Lazy load the ranker."""
+        if self._ranker is None and FLASHRANK_AVAILABLE:
+            try:
+                self._ranker = Ranker(model_name=self.model_name)
+                logger.info(f"Loaded FlashRank model: {self.model_name}")
+            except Exception as e:
+                logger.error(f"Failed to load FlashRank: {e}")
+        return self._ranker
+    
+    def rerank(
+        self,
+        query: str,
+        nodes: List[NodeWithScore],
+        top_n: int = 5
+    ) -> List[NodeWithScore]:
+        """
+        Rerank nodes using FlashRank.
+        
+        Args:
+            query: User query
+            nodes: List of nodes to rerank
+            top_n: Number of top results to return
+            
+        Returns:
+            Reranked list of nodes
+        """
+        if not nodes:
+            return nodes
+        
+        ranker = self._get_ranker()
+        if ranker is None:
+            # Fall back to original order
+            return nodes[:top_n]
+        
+        try:
+            # Prepare passages for FlashRank
+            passages = [
+                {"id": i, "text": node.node.text[:1000]}  # Limit text length
+                for i, node in enumerate(nodes)
+            ]
+            
+            # Create rerank request
+            rerank_request = RerankRequest(query=query, passages=passages)
+            
+            # Get reranked results
+            results = ranker.rerank(rerank_request)
+            
+            # Map back to original nodes with updated scores
+            reranked = []
+            for result in results[:top_n]:
+                idx = result["id"]
+                node = nodes[idx]
+                # Update score with reranker score
+                node.score = result["score"]
+                reranked.append(node)
+            
+            logger.debug(f"FlashRank reranked {len(nodes)} -> {len(reranked)} nodes")
+            return reranked
+            
+        except Exception as e:
+            logger.warning(f"FlashRank reranking failed: {e}")
+            return nodes[:top_n]
 
 
 @dataclass
@@ -146,6 +241,13 @@ class ContextRetriever:
             similarity_cutoff=self.config.similarity_threshold
         )
         
+        # Initialize FlashRank reranker if enabled
+        self._flashrank_reranker = None
+        if self.config.use_flashrank and FLASHRANK_AVAILABLE:
+            self._flashrank_reranker = FlashRankReranker(
+                model_name=self.config.flashrank_model
+            )
+        
     def retrieve(
         self,
         query_bundle: QueryBundle,
@@ -176,9 +278,18 @@ class ContextRetriever:
         
         # Rerank if enabled
         if self.config.rerank:
-            nodes = self._rerank(nodes, query_bundle)
+            # Use FlashRank if available, otherwise fall back to heuristic
+            if self._flashrank_reranker is not None:
+                nodes = self._flashrank_reranker.rerank(
+                    query_bundle.query_str,
+                    nodes,
+                    top_n=self.config.rerank_top_n
+                )
+            else:
+                nodes = self._rerank(nodes, query_bundle)
+                nodes = nodes[:self.config.rerank_top_n]
         
-        return nodes[:self.config.rerank_top_n]
+        return nodes
     
     def _apply_filters(
         self,

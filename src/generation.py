@@ -61,11 +61,13 @@ class LLMConfig:
     """Configuration for LLM."""
     model_name: str = "llama3.2"
     base_url: str = "http://localhost:11434"
-    temperature: float = 0.1
-    max_tokens: int = 1024  # Reduced for faster generation
-    context_window: int = 4096
-    request_timeout: float = 60.0  # Reduced timeout
-    num_predict: int = 512  # Limit output tokens for speed
+    temperature: float = 0.1  # Lower for faster, more deterministic output
+    max_tokens: int = 512  # Reduced for faster generation
+    context_window: int = 2048  # Reduced context for speed
+    request_timeout: float = 30.0  # Aggressive timeout
+    num_predict: int = 256  # Limit output tokens for speed
+    num_ctx: int = 2048  
+    num_thread: int = 4  
 
 
 @dataclass
@@ -104,7 +106,11 @@ class OllamaLLM:
                     temperature=self.config.temperature,
                     request_timeout=self.config.request_timeout,
                     context_window=self.config.context_window,
-                    additional_kwargs={"num_predict": self.config.num_predict}
+                    additional_kwargs={
+                        "num_predict": self.config.num_predict,
+                        "num_ctx": self.config.num_ctx,
+                        "num_thread": self.config.num_thread,
+                    }
                 )
                 logger.info(f"Initialized Ollama with model: {self.config.model_name}")
             except Exception as e:
