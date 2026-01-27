@@ -160,8 +160,8 @@ class PipelineConfig:
     embedding_device: str = "cpu"  # or "cuda"
     
     # Chunking
-    chunk_size: int = 512
-    chunk_overlap: int = 128
+    chunk_size: int = 256
+    chunk_overlap: int = 64
     
     # LLM
     llm_model: str = "llama3.2"
