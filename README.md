@@ -10,6 +10,15 @@ A production-grade Retrieval-Augmented Generation (RAG) system for Life Cycle As
 - **LLM Integration**: Ollama integration with grounded prompts
 - **Evaluation**: Faithfulness scoring and hallucination detection
 
+### Changes Implemented
+
+| Feature | Description |
+|---------|-------------|
+| LangSmith Integration | Added `LangSmithEvaluator` class in `src/evaluation.py` for tracing and evaluation. Set `LANGSMITH_API_KEY` env var to enable. |
+| Semantic Chunking | Added `SemanticChunker` class in `src/chunking.py` that splits documents based on embedding similarity for more coherent chunks. |
+| FlashRank Reranker | Added `FlashRankReranker` in `src/retrieval.py` using `ms-marco-MiniLM-L-12-v2` for ultra-fast (<50ms) reranking. |
+| Faster Inference | Optimized `src/generation.py`: reduced `num_predict=256`, `num_ctx=2048`, `temperature=0.1`, shorter prompts, aggressive timeout (30s). |
+
 ## Project Structure
 
 ```
