@@ -1,0 +1,51 @@
+# Core LlamaIndex packages
+llama-index>=0.11.0
+llama-index-core>=0.11.0
+llama-index-embeddings-huggingface>=0.3.0
+llama-index-llms-ollama>=0.3.0
+llama-index-llms-gemini>=0.3.0
+google-generativeai>=0.5.0
+llama-index-llms-openai-like>=0.2.0
+llama-index-vector-stores-qdrant>=0.3.0
+llama-index-readers-file>=0.2.0
+
+# Document parsing
+docling>=2.5.0
+docling-core>=2.3.0
+pypdf>=4.0.0
+python-docx>=1.1.0
+openpyxl>=3.1.2
+pillow>=10.0.0
+
+# Mind map parsing
+xmindparser>=1.0.8
+
+# Embeddings and ML
+sentence-transformers>=3.0.0
+transformers>=4.40.0
+torch>=2.2.0
+
+# Vector database
+qdrant-client>=1.9.0
+
+# LLM
+ollama>=0.3.0
+
+# Evaluation
+ragas>=0.1.10
+datasets>=2.18.0
+langsmith>=0.1.0
+
+# Reranking
+flashrank>=0.2.0
+
+# API (optional for later)
+fastapi>=0.110.0
+uvicorn>=0.27.0
+python-multipart>=0.0.9
+
+# Utilities
+tqdm>=4.66.0
+pandas>=2.2.0
+numpy>=1.26.0
+pydantic>=2.6.0
