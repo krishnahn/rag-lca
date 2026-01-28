@@ -7,7 +7,7 @@ A production-grade Retrieval-Augmented Generation (RAG) system for Life Cycle As
 - **Multi-format Document Ingestion**: Parse PDFs, Word, Excel, PowerPoint, images, and mind maps
 - **Intelligent Chunking**: Structure-aware chunking that preserves tables, calculations, and hierarchies
 - **Vector Database**: Qdrant-based storage with metadata filtering
-- **LLM Integration**: OpenRouter with Gemini 2.0 Flash for grounded prompts
+- **LLM Integration**: Ollama with Llama 3.2 for grounded prompts
 - **Evaluation**: Faithfulness scoring and hallucination detection
 
 ### Changes Implemented
@@ -56,16 +56,18 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-### 3. Set up OpenRouter API
+### 3. Set up Ollama
 
-Get an API key from [OpenRouter](https://openrouter.ai/keys) and set the environment variable:
+Install and run Ollama:
 
 ```bash
-# Windows PowerShell
-$env:OPENROUTER_API_KEY = "your-api-key-here"
+# Install Ollama from https://ollama.ai
 
-# Linux/Mac
-export OPENROUTER_API_KEY=your-api-key-here
+# Pull the Llama 3.2 model
+ollama pull llama3.2
+
+# Start Ollama server (if not already running)
+ollama serve
 ```
 
 ## Usage
@@ -146,7 +148,7 @@ python -m src.pipeline test
 - Metadata-based filtering
 
 ### Phase 6: Generation
-- OpenRouter LLM integration (Gemini 2.0 Flash)
+- Ollama LLM integration (Llama 3.2)
 - Custom prompts for grounded responses
 - Source citation in answers
 - Multi-document synthesis
@@ -175,8 +177,8 @@ class PipelineConfig:
     chunk_size: int = 256
     chunk_overlap: int = 64
     
-    # LLM
-    llm_model: str = "google/gemini-2.0-flash-001"
+    # LLM (Ollama)
+    llm_model: str = "llama3.2"
     llm_temperature: float = 0.1
     
     # Retrieval
@@ -203,7 +205,7 @@ from src.pipeline import LCARagPipeline, PipelineConfig
 # Initialize pipeline
 config = PipelineConfig(
     data_dir=Path("./LCA"),
-    llm_model="google/gemini-2.0-flash-001"
+    llm_model="llama3.2"
 )
 pipeline = LCARagPipeline(config)
 
@@ -241,11 +243,14 @@ python -m src.evaluation
 
 ## Troubleshooting
 
-### OpenRouter not available
+### Ollama not available
 ```
-Error: OpenRouter is not available
+Error: Ollama is not available
 ```
-Solution: Ensure `OPENROUTER_API_KEY` environment variable is set with a valid API key from https://openrouter.ai/keys
+Solution: 
+1. Ensure Ollama is installed: https://ollama.ai
+2. Start Ollama server: `ollama serve`
+3. Pull the model: `ollama pull llama3.2`
 
 ### CUDA out of memory
 Solution: Set `embedding_device: str = "cpu"` in config

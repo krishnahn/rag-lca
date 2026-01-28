@@ -51,8 +51,8 @@ class PipelineConfig:
     # Vector DB settings
     collection_name: str = "lca_documents"
     
-    # LLM settings
-    llm_model: str = "google/gemini-2.0-flash-001"
+    # LLM settings (Ollama)
+    llm_model: str = "llama3.2"
     llm_temperature: float = 0.1
     
     # Retrieval settings
@@ -190,14 +190,14 @@ class LCARagPipeline:
     def _get_llm(self):
         """Get or create LLM."""
         if self._llm is None:
-            from src.generation import OpenRouterLLM, LLMConfig
+            from src.generation import OllamaLLM, LLMConfig
 
             llm_config = LLMConfig(
                 model_name=self.config.llm_model,
                 temperature=self.config.llm_temperature
             )
 
-            self._llm = OpenRouterLLM(llm_config)
+            self._llm = OllamaLLM(llm_config)
         return self._llm
     
     def _get_generator(self):

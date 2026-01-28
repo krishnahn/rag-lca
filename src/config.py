@@ -81,16 +81,20 @@ class VectorDBConfig:
 class LLMConfig:
     """LLM configuration."""
     
-    # OpenRouter settings
-    model_name: str = "google/gemini-2.0-flash-001"
+    # Ollama settings
+    model_name: str = "llama3.2"
+    base_url: str = "http://localhost:11434"
     
     # Generation parameters
     temperature: float = 0.1
-    max_tokens: int = 2048
-    context_window: int = 4096
+    max_tokens: int = 512
+    context_window: int = 2048
+    num_predict: int = 256
+    num_ctx: int = 2048
+    num_thread: int = 4
     
     # Request timeout
-    request_timeout: float = 120.0
+    request_timeout: float = 30.0
 
 
 @dataclass
