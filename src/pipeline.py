@@ -52,8 +52,7 @@ class PipelineConfig:
     collection_name: str = "lca_documents"
     
     # LLM settings
-    llm_model: str = "llama3.2"
-    llm_base_url: str = "http://localhost:11434"
+    llm_model: str = "google/gemini-2.0-flash-001"
     llm_temperature: float = 0.1
     
     # Retrieval settings
@@ -191,15 +190,14 @@ class LCARagPipeline:
     def _get_llm(self):
         """Get or create LLM."""
         if self._llm is None:
-            from src.generation import OllamaLLM, LLMConfig
-            
+            from src.generation import OpenRouterLLM, LLMConfig
+
             llm_config = LLMConfig(
                 model_name=self.config.llm_model,
-                base_url=self.config.llm_base_url,
                 temperature=self.config.llm_temperature
             )
-            
-            self._llm = OllamaLLM(llm_config)
+
+            self._llm = OpenRouterLLM(llm_config)
         return self._llm
     
     def _get_generator(self):

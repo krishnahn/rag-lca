@@ -81,9 +81,8 @@ class VectorDBConfig:
 class LLMConfig:
     """LLM configuration."""
     
-    # Ollama settings
-    model_name: str = "llama3.2"
-    base_url: str = "http://localhost:11434"
+    # OpenRouter settings
+    model_name: str = "google/gemini-2.0-flash-001"
     
     # Generation parameters
     temperature: float = 0.1

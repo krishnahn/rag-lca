@@ -2,12 +2,13 @@
 LLM Generation Module for LCA RAG Application.
 
 This module handles:
-- LLM integration with Ollama
+- LLM integration with OpenRouter API
 - Custom prompts for grounded responses
 - Multi-source answer generation
 - Citation and source tracking
 """
 
+import os
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
@@ -15,7 +16,7 @@ from dataclasses import dataclass, field
 # LlamaIndex imports
 from llama_index.core import PromptTemplate
 from llama_index.core.llms import ChatMessage, MessageRole
-from llama_index.llms.ollama import Ollama
+from llama_index.llms.openai_like import OpenAILike
 
 from tqdm import tqdm
 
@@ -59,15 +60,12 @@ Please provide a comprehensive answer based ONLY on the context above. Remember 
 @dataclass
 class LLMConfig:
     """Configuration for LLM."""
-    model_name: str = "llama3.2"
-    base_url: str = "http://localhost:11434"
-    temperature: float = 0.1  # Lower for faster, more deterministic output
-    max_tokens: int = 512  # Reduced for faster generation
-    context_window: int = 2048  # Reduced context for speed
-    request_timeout: float = 30.0  # Aggressive timeout
-    num_predict: int = 256  # Limit output tokens for speed
-    num_ctx: int = 2048  
-    num_thread: int = 4  
+    model_name: str = "google/gemini-2.0-flash-001"
+    api_key: Optional[str] = None  # Falls back to OPENROUTER_API_KEY env var
+    api_base: str = "https://openrouter.ai/api/v1"
+    temperature: float = 0.1
+    max_tokens: int = 1024
+    request_timeout: float = 120.0
 
 
 @dataclass
@@ -81,81 +79,63 @@ class GenerationResult:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-class OllamaLLM:
+class OpenRouterLLM:
     """
-    Wrapper for Ollama LLM integration.
+    Wrapper for OpenRouter API integration.
     """
-    
+
     def __init__(self, config: Optional[LLMConfig] = None):
-        """
-        Initialize Ollama LLM.
-        
-        Args:
-            config: LLM configuration
-        """
         self.config = config or LLMConfig()
         self._llm = None
-        
-    def _get_llm(self) -> Ollama:
+
+    def _get_llm(self) -> OpenAILike:
         """Lazy load the LLM."""
         if self._llm is None:
             try:
-                self._llm = Ollama(
+                api_key = self.config.api_key or os.environ.get("OPENROUTER_API_KEY")
+                if not api_key:
+                    raise ValueError("OPENROUTER_API_KEY environment variable not set. Get one at https://openrouter.ai/keys")
+                self._llm = OpenAILike(
                     model=self.config.model_name,
-                    base_url=self.config.base_url,
+                    api_key=api_key,
+                    api_base=self.config.api_base,
                     temperature=self.config.temperature,
-                    request_timeout=self.config.request_timeout,
-                    context_window=self.config.context_window,
-                    additional_kwargs={
-                        "num_predict": self.config.num_predict,
-                        "num_ctx": self.config.num_ctx,
-                        "num_thread": self.config.num_thread,
-                    }
+                    max_tokens=self.config.max_tokens,
+                    is_chat_model=True,
                 )
-                logger.info(f"Initialized Ollama with model: {self.config.model_name}")
+                logger.info(f"Initialized OpenRouter with model: {self.config.model_name}")
             except Exception as e:
-                logger.error(f"Failed to initialize Ollama: {e}")
+                logger.error(f"Failed to initialize OpenRouter: {e}")
                 raise
         return self._llm
-    
-    def get_llm(self) -> Ollama:
+
+    def get_llm(self) -> OpenAILike:
         """Get the LLM instance."""
         return self._get_llm()
-    
+
     def generate(
         self,
         prompt: str,
         system_prompt: Optional[str] = None
     ) -> str:
-        """
-        Generate a response from the LLM.
-        
-        Args:
-            prompt: User prompt
-            system_prompt: Optional system prompt
-            
-        Returns:
-            Generated text
-        """
         llm = self._get_llm()
-        
+
         messages = []
         if system_prompt:
             messages.append(ChatMessage(role=MessageRole.SYSTEM, content=system_prompt))
         messages.append(ChatMessage(role=MessageRole.USER, content=prompt))
-        
+
         response = llm.chat(messages)
         return response.message.content
-    
+
     def check_availability(self) -> bool:
-        """Check if Ollama is available."""
+        """Check if OpenRouter API is available."""
         try:
             llm = self._get_llm()
-            # Try a simple completion
             response = llm.complete("Say 'OK' if you're working.")
             return bool(response.text)
         except Exception as e:
-            logger.warning(f"Ollama not available: {e}")
+            logger.warning(f"OpenRouter not available: {e}")
             return False
 
 
@@ -257,14 +237,14 @@ class RAGGenerator:
     
     def __init__(
         self,
-        llm: OllamaLLM,
+        llm: OpenRouterLLM,
         prompt_builder: Optional[PromptBuilder] = None
     ):
         """
         Initialize the RAG generator.
         
         Args:
-            llm: OllamaLLM instance
+            llm: OpenRouterLLM instance
             prompt_builder: Optional PromptBuilder instance
         """
         self.llm = llm
@@ -376,18 +356,16 @@ def main():
     """Test the generation module."""
     # Check Ollama availability
     config = LLMConfig(
-        model_name="llama3.2",
+        model_name="google/gemini-2.0-flash-001",
         temperature=0.1
     )
     
-    llm = OllamaLLM(config)
+    llm = OpenRouterLLM(config)
     
-    print("\n=== Checking Ollama Availability ===")
+    print("\n=== Checking OpenRouter Availability ===")
     if not llm.check_availability():
-        print("Ollama is not available. Please ensure:")
-        print("1. Ollama is installed (https://ollama.ai)")
-        print("2. Ollama is running (ollama serve)")
-        print("3. Model is pulled (ollama pull llama3.2)")
+        print("OpenRouter is not available. Please ensure:")
+        print("1. OPENROUTER_API_KEY is set (https://openrouter.ai/keys)")
         print("\nRunning with mock responses for testing...")
         
         # Create mock response for testing
@@ -410,7 +388,7 @@ Summary: Steel's environmental impact (2.1 kg CO2 eq/kg) is about 4 times lower 
         
         llm = MockLLM()
     else:
-        print("Ollama is available!")
+        print("OpenRouter is available!")
     
     # Create sample contexts
     sample_contexts = [
